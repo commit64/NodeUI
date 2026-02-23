@@ -8,7 +8,7 @@ GraphicsItem::GraphicsItem(int w, int h, QGraphicsItem* parent)
     : QGraphicsObject(parent) {
   width_ = w, height_ = h;
   w_ = w, h_ = h;
-  minw_ = w, minh_ = h;
+  minw_ = 0, minh_ = 0;
 }
 
 void GraphicsItem::setSize(int w, int h) {
@@ -21,7 +21,7 @@ void GraphicsItem::setSize(int w, int h) {
     width_ = std::max(minw, w);
     height_ = std::max(minh, h);
     update();
-    // layout_->update:calc
+    layout_->update(gvItem::ItemFlag::OnlyRecalc);
   } else if (!parent_) {
     if ((w < minw_ && h < minh_) || (w == width_ && h == height_)) {
       return;
@@ -39,7 +39,7 @@ void GraphicsItem::setPreferredSize(int w, int h) {
   w_ = std::max(w, minw_);
   h_ = std::max(h, minh_);
   if (parent_) {
-    // parent_->update:dirty measure calc
+    parent_->update(gvItem::ItemFlag::SizeHintChanged);
   }
 }
 
@@ -55,9 +55,7 @@ void GraphicsItem::setMinimumSize(int w, int h) {
     if (w == minw_ && h == minh_) {
       return;
     }
-    if (parent_->width_ < w || parent_->height_ < h) {
-      // update all
-    }
+    parent_->update(gvItem::ItemFlag::SizeHintChanged);
   }
 }
 
@@ -71,16 +69,8 @@ void GraphicsItem::setLayout(std::unique_ptr<gvLayout> layout) {
     return;
   }
 
-  for (auto item : layout_->items_) {
-    if (item->type_ == gvItem::ItemType::Widget) {
-      auto widget = static_cast<gvWidget*>(item);
-      widget->parent_->setParentItem(this);
-    } else {
-      auto layout = static_cast<gvLayout*>(item);
-      layout->parent_->setParentItem(this);
-    }
-  }
-  // layout_->update all
+  layout_->setParentItem();
+  layout_->update(gvItem::ItemFlag::SizeHintChanged);
 }
 
 QRectF GraphicsItem::boundingRect() const {

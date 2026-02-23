@@ -4,32 +4,40 @@
 #include <QGraphicsView>
 #include <QGraphicsScene>
 
+class MyView : public QGraphicsView {
+public:
+  ui::GraphicsItem* rectItem = nullptr;
+
+protected:
+  void resizeEvent(QResizeEvent* e) override {
+    QGraphicsView::resizeEvent(e);
+
+    QRectF r(0, 0, viewport()->width(), viewport()->height());
+    scene()->setSceneRect(r);
+
+    if (rectItem) {
+      rectItem->setSize(r.width(), r.height());
+      rectItem->setPos(0, 0);
+    }
+  }
+};
+
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
   QGraphicsScene scene;
-  QGraphicsView view(&scene);
-
-  auto w1 = new ui::GraphicsItem(15, 20);
-  auto w2 = new ui::GraphicsItem(30, 60);
-  auto w3 = new ui::GraphicsItem(1, 80);
-  auto w11 = new ui::GraphicsItem(15, 20);
-  auto w22 = new ui::GraphicsItem(30, 60);
-  auto w33 = new ui::GraphicsItem(1, 80);
-  auto layout = std::make_unique<ui::gvRowLayout>();
-  layout->addWidget(w1);
-  layout->addWidget(w2);
-  layout->addWidget(w3);
-  ui::GraphicsItem w(200, 200);
-  auto m = new ui::GraphicsItem(400, 400);
-  w.setLayout(std::move(layout));
-  auto root = std::make_unique<ui::gvRowLayout>();
-  root->addWidget(&w);
-  root->addWidget(w11);
-  root->addWidget(w22);
-  root->addWidget(w33);
-  m->setLayout(std::move(root));
-
+  MyView view;
+  view.setScene(&scene);
+  auto m = new ui::GraphicsItem(500, 500);
   scene.addItem(m);
+  scene.setItemIndexMethod(QGraphicsScene::NoIndex);
+
+  auto layout = new ui::gvRowLayout;
+  for (int i = 0; i < 10; ++i) {
+    auto* w = new ui::GraphicsItem(20, 20);
+    layout->addWidget(w);
+  }
+  m->setLayout(std::unique_ptr<ui::gvLayout>(layout));
+  view.rectItem = m;
   view.show();
   return app.exec();
 }

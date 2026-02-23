@@ -21,7 +21,7 @@ struct gvItem {
   gvItem(ItemType type)
       : type_(type) {
   }
-  virtual ~gvItem() = default;
+  // virtual ~gvItem() = default;
 
   uint8_t type_ = 0;
   uint8_t flag_ = 0;
@@ -44,16 +44,16 @@ struct gvLayout : gvItem {
   virtual ~gvLayout();
 
   void addWidget(GraphicsItem* widget);
-  void removeWidget(GraphicsItem* widget);
 
 private:
   friend struct GraphicsItem;
   friend struct gvRowLayout;
 
   gvLayout* updateTop();
-  void flush();
+  void flush(uint8_t flag);
   void update(uint8_t flag);
   void setParentItem();
+  void removeWidget(GraphicsItem* widget);
 
   void getItemSize(gvItem* item, int& w, int& h);
   void getItemMinSize(gvItem* item, int& w, int& h);

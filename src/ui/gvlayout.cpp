@@ -1,11 +1,12 @@
 #include <gvlayout.h>
 #include <graphicsitem.h>
 #include <QTimer>
+#include <algorithm>
 
 namespace ui {
 
 gvLayout::~gvLayout() {
-  for (auto item : items_) {
+  for (const auto item : items_) {
     if (item->type_ == ItemType::Widget) {
       delete static_cast<gvWidget*>(item);
     }
@@ -17,11 +18,15 @@ void gvLayout::addWidget(GraphicsItem* widget) {
     return;
   }
 
+  if (widget->parent_) {
+    removeWidget(widget);
+    return;
+  }
+
   widget->parent_ = this;
 
-  if (auto own_layout = widget->layout_.get()) {
+  if (auto* own_layout = widget->layout_.get()) {
     own_layout->root_ = this;
-    own_layout->parent_ = widget;
     items_.push_back(own_layout);
   } else {
     items_.push_back(new gvWidget(widget));
@@ -30,10 +35,26 @@ void gvLayout::addWidget(GraphicsItem* widget) {
   if (parent_) {
     widget->setParentItem(parent_);
   }
-  // update
+  update(ItemFlag::SizeHintChanged);
 }
 
 void gvLayout::removeWidget(GraphicsItem* widget) {
+  if (auto* own_layout = widget->layout_.get()) {
+    auto it = std::find(items_.cbegin(), items_.cend(), own_layout);
+    items_.erase(it);
+    own_layout->root_ = nullptr;
+    own_layout->top_ = nullptr;
+    own_layout->flag_ &= ~ItemFlag::AutoFixed;
+  } else {
+    auto it = std::find_if(items_.cbegin(), items_.cend(), [&](auto* item) {
+      return static_cast<gvWidget*>(item)->parent_ == widget;
+    });
+    delete static_cast<gvWidget*>(*it);
+    items_.erase(it);
+  }
+  // widget->parent_ = nullptr;
+  widget->setParentItem(nullptr);
+  update(ItemFlag::SizeHintChanged);
 }
 
 void gvLayout::getItemSize(gvItem* item, int& w, int& h) {
@@ -75,12 +96,10 @@ void gvLayout::setParentItem() {
   for (auto item : items_) {
     if (item->type_ == ItemType::Widget) {
       auto widget = static_cast<gvWidget*>(item)->parent_;
-      if (widget->parentItem() != parent_) {
-        widget->setParentItem(parent_);
-      }
+      widget->setParentItem(parent_);
     } else {
       auto widget = static_cast<gvLayout*>(item)->parent_;
-      ;
+      widget->setParentItem(parent_);
     }
   }
 }
@@ -111,15 +130,64 @@ void gvLayout::setupGeom() {
   setupGeom_impl();
 }
 
+void gvLayout::calcGeom() {
+  if (!parent_) {
+    return;
+  }
+  calcGeom_impl();
+  for (const auto item : items_) {
+    if (item->type_ == ItemType::Widget) {
+      continue;
+    }
+    auto layout = static_cast<gvLayout*>(item);
+    layout->calcGeom();
+  }
+}
+
 gvLayout* gvLayout::updateTop() {
-  ;
+  if (!top_ || top_->root_) {
+    auto* r = this;
+    while (r->root_) {
+      r = r->root_;
+    }
+
+    auto* p = this;
+    do {
+      p->top_ = r;
+      p = p->root_;
+    } while (p && p->top_ != r);
+  }
+
+  return top_;
 }
 
-void gvLayout::flush() {
-  ;
+void gvLayout::flush(uint8_t flag) {
+  flag_ &= ~ItemFlag::Pending;
+  if (flag & ItemFlag::SizeHintChanged) {
+    setupGeom();
+  }
+  calcGeom();
 }
 
-//
+void gvLayout::update(uint8_t flag) {
+  auto* root = updateTop();
+  if (flag & ItemFlag::SizeHintChanged) {
+    auto* p = this;
+    do {
+      if (!(p->flag_ & ItemFlag::NotDirty)) {
+        break;
+      }
+      p->flag_ &= ~ItemFlag::NotDirty;
+      p = p->root_;
+    } while (p);
+  }
+
+  if (root->flag_ & ItemFlag::Pending) {
+    return;
+  }
+  root->flag_ |= ItemFlag::Pending;
+  QTimer::singleShot(0, root->parent_, [root, flag] { root->flush(flag); });
+}
 
 void gvRowLayout::setupGeom_impl() {
   for (const auto item : items_) {
