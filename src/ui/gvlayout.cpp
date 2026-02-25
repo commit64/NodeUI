@@ -9,56 +9,24 @@ gvLayout::~gvLayout() {
   for (const auto item : items_) {
     if (item->type_ == ItemType::Widget) {
       delete static_cast<gvWidget*>(item);
+    } else {
+      delete static_cast<gvLayout*>(item);
     }
   }
 }
 
 void gvLayout::addWidget(GraphicsItem* widget) {
-  if (!widget) {
-    return;
-  }
-
-  if (widget->parent_) {
-    removeWidget(widget);
-    return;
-  }
-
   widget->parent_ = this;
-
-  if (auto* own_layout = widget->layout_.get()) {
-    own_layout->root_ = this;
-    items_.push_back(own_layout);
-  } else {
-    items_.push_back(new gvWidget(widget));
-  }
-
-  if (parent_) {
-    widget->setParentItem(parent_);
-  }
-  update(ItemFlag::SizeHintChanged);
+  items_.push_back(new gvWidget(widget));
 }
 
-void gvLayout::removeWidget(GraphicsItem* widget) {
-  if (auto* own_layout = widget->layout_.get()) {
-    auto it = std::find(items_.cbegin(), items_.cend(), own_layout);
-    items_.erase(it);
-    own_layout->root_ = nullptr;
-    own_layout->top_ = nullptr;
-    own_layout->flag_ &= ~ItemFlag::AutoFixed;
-  } else {
-    auto it = std::find_if(items_.cbegin(), items_.cend(), [&](auto* item) {
-      return static_cast<gvWidget*>(item)->parent_ == widget;
-    });
-    delete static_cast<gvWidget*>(*it);
-    items_.erase(it);
-  }
-  // widget->parent_ = nullptr;
-  widget->setParentItem(nullptr);
-  update(ItemFlag::SizeHintChanged);
+void gvLayout::addLayout(gvLayout* layout) {
+  layout->root_ = this;
+  items_.push_back(layout);
 }
 
 void gvLayout::getItemSize(gvItem* item, int& w, int& h) {
-  if (item->type_ == gvItem::ItemType::Widget) {
+  if (item->type_ == ItemType::Widget) {
     auto widget = static_cast<gvWidget*>(item);
     w = widget->parent_->w_;
     h = widget->parent_->h_;
@@ -92,22 +60,19 @@ int gvLayout::fitItemSize(const int item, const int pos, const int all,
   return (int)width;
 }
 
-void gvLayout::setParentItem() {
+void gvLayout::setParentItem(GraphicsItem* parent) {
   for (auto item : items_) {
     if (item->type_ == ItemType::Widget) {
       auto widget = static_cast<gvWidget*>(item)->parent_;
-      widget->setParentItem(parent_);
+      widget->setParentItem(parent);
     } else {
-      auto widget = static_cast<gvLayout*>(item)->parent_;
-      widget->setParentItem(parent_);
+      auto layout = static_cast<gvLayout*>(item);
+      layout->setParentItem(parent);
     }
   }
 }
 
 void gvLayout::setupGeom() {
-  if (!parent_) {
-    return;
-  }
   if (flag_ & ItemFlag::NotDirty) {
     return;
   }
@@ -118,29 +83,34 @@ void gvLayout::setupGeom() {
   h_ = 0;
   minw_ = 0;
   minh_ = 0;
-  flag_ &= ~ItemFlag::AutoFixed;
 
   for (const auto item : items_) {
+    item->flag_ &= ~ItemFlag::AutoFixed;
+    gvLayout* layout;
     if (item->type_ == ItemType::Widget) {
-      continue;
+      layout = static_cast<gvWidget*>(item)->parent_->layout_.get();
+    } else {
+      layout = static_cast<gvLayout*>(item);
     }
-    auto layout = static_cast<gvLayout*>(item);
-    layout->setupGeom();
+    if (layout) {
+      layout->setupGeom();
+    }
   }
   setupGeom_impl();
 }
 
 void gvLayout::calcGeom() {
-  if (!parent_) {
-    return;
-  }
   calcGeom_impl();
   for (const auto item : items_) {
+    gvLayout* layout;
     if (item->type_ == ItemType::Widget) {
-      continue;
+      layout = static_cast<gvWidget*>(item)->parent_->layout_.get();
+    } else {
+      layout = static_cast<gvLayout*>(item);
     }
-    auto layout = static_cast<gvLayout*>(item);
-    layout->calcGeom();
+    if (layout) {
+      layout->calcGeom();
+    }
   }
 }
 
@@ -161,9 +131,10 @@ gvLayout* gvLayout::updateTop() {
   return top_;
 }
 
-void gvLayout::flush(uint8_t flag) {
+void gvLayout::flush() {
   flag_ &= ~ItemFlag::Pending;
-  if (flag & ItemFlag::SizeHintChanged) {
+  if (flag_ & ItemFlag::SizeHintChanged) {
+    flag_ &= ~ItemFlag::SizeHintChanged;
     setupGeom();
   }
   calcGeom();
@@ -182,11 +153,13 @@ void gvLayout::update(uint8_t flag) {
     } while (p);
   }
 
+  root->flag_ |= flag;
+
   if (root->flag_ & ItemFlag::Pending) {
     return;
   }
   root->flag_ |= ItemFlag::Pending;
-  QTimer::singleShot(0, root->parent_, [root, flag] { root->flush(flag); });
+  QTimer::singleShot(0, root->parent_, [root] { root->flush(); });
 }
 
 void gvRowLayout::setupGeom_impl() {
@@ -205,8 +178,10 @@ void gvRowLayout::calcGeom_impl() {
   int n = (int)items_.size();
   int force_minw = minw_ + 2 * margin_ + (n > 0 ? spacing_ * (n - 1) : 0);
   int force_minh = minh_ + 2 * margin_;
-  width_ = std::max(parent_->width_, force_minw);
-  height_ = std::max(parent_->height_, force_minh);
+  if (!root_) {
+    width_ = std::max(parent_->width_, force_minw);
+    height_ = std::max(parent_->height_, force_minh);
+  }
 
   int fixedw = 0, new_fixedw = 0;
   int freew = w_, new_freew = w_;
@@ -222,7 +197,6 @@ void gvRowLayout::calcGeom_impl() {
     flag = false;
 
     for (const auto item : items_) {
-      idx += 1;
       if (item->flag_ & ItemFlag::AutoFixed) {
         continue;
       }
@@ -232,7 +206,6 @@ void gvRowLayout::calcGeom_impl() {
       getItemSize(item, itemw, itemh);
       int item_minw, item_minh;
       getItemMinSize(item, item_minw, item_minh);
-      x += itemw;
 
       int new_itemw;
       int available = width_ - fixedw - 2 * margin_ - spacing_ * (n - 1);
@@ -242,19 +215,26 @@ void gvRowLayout::calcGeom_impl() {
         new_itemw = 0;
       }
 
-      if ((new_itemw <= item_minw) || (item->flag_ & ItemFlag::Fixed)) {
+      x += new_itemw;
+
+      if ((new_itemw < item_minw) || (item->flag_ & ItemFlag::Fixed)) {
         item->flag_ |= ItemFlag::AutoFixed;
         new_freew -= itemw;
         new_fixedw += item_minw;
         flag = true;
-      } else {
-        last_free_idx = idx;
       }
     }
 
     fixedw = new_fixedw;
     freew = new_freew;
   } while (flag);
+
+  for (int i = (int)items_.size() - 1; i >= 0; --i) {
+    if (!(items_[i]->flag_ & ItemFlag::AutoFixed)) {
+      last_free_idx = i;
+      break;
+    }
+  }
 
   int x = margin_;
   int y;
@@ -276,16 +256,27 @@ void gvRowLayout::calcGeom_impl() {
 
     y = margin_ + (height_ - itemh) / 2;
 
+    int xpos = x + x_;
+    int ypos = y + y_;
     if (item->type_ == ItemType::Widget) {
       auto widget = static_cast<gvWidget*>(item);
-      widget->parent_->width_ = itemw;
-      widget->parent_->height_ = itemh;
-      widget->parent_->setPos(x, y);
+      auto parent = widget->parent_;
+      parent->width_ = itemw;
+      parent->height_ = itemh;
+      parent->setPos(xpos, ypos);
+      if (parent->layout_) {
+        auto layout = parent->layout_.get();
+        layout->width_ = itemw;
+        layout->height_ = itemh;
+        layout->x_ = xpos;
+        layout->y_ = ypos;
+      }
     } else {
       auto layout = static_cast<gvLayout*>(item);
-      layout->parent_->width_ = itemw;
-      layout->parent_->height_ = itemh;
-      layout->parent_->setPos(x, y);
+      layout->width_ = itemw;
+      layout->height_ = itemh;
+      layout->x_ = xpos;
+      layout->y_ = ypos;
     }
 
     x += itemw + spacing_;

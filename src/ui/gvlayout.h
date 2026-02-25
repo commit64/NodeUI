@@ -12,9 +12,9 @@ struct gvItem {
     AutoFixed = 1 << 0,
     Fixed = 1 << 1,
     NotDirty = 1 << 2,
-    SizeHintChanged = 1 << 3, // only for top
-    OnlyRecalc = 1 << 4,      // only for top
-    Pending = 1 << 5          // only for top
+    SizeHintChanged = 1 << 3,
+    OnlyRecalc = 1 << 4,
+    Pending = 1 << 5
   };
   enum LayoutAlignment : uint8_t { Left, Center, Right };
 
@@ -44,16 +44,22 @@ struct gvLayout : gvItem {
   virtual ~gvLayout();
 
   void addWidget(GraphicsItem* widget);
+  void addLayout(gvLayout* layout);
+  void updateAll() {
+    update(ItemFlag::SizeHintChanged);
+  }
+  void updateOnly() {
+    update(ItemFlag::OnlyRecalc);
+  }
 
-private:
+protected:
   friend struct GraphicsItem;
   friend struct gvRowLayout;
 
   gvLayout* updateTop();
-  void flush(uint8_t flag);
   void update(uint8_t flag);
-  void setParentItem();
-  void removeWidget(GraphicsItem* widget);
+  void flush();
+  void setParentItem(GraphicsItem* parent);
 
   void getItemSize(gvItem* item, int& w, int& h);
   void getItemMinSize(gvItem* item, int& w, int& h);
@@ -68,6 +74,7 @@ private:
   using gvItem::flag_;
   using gvItem::type_;
 
+  int x_ = 0, y_ = 0;
   int width_ = 0, height_ = 0;
   int w_ = 0, h_ = 0;
   int minw_ = 0, minh_ = 0;
@@ -87,7 +94,6 @@ struct gvRowLayout final : gvLayout {
   }
 
   using gvLayout::addWidget;
-  using gvLayout::removeWidget;
 
 private:
   void setupGeom_impl() override;
