@@ -13,8 +13,7 @@ struct gvItem {
     Fixed = 1 << 1,
     NotDirty = 1 << 2,
     SizeHintChanged = 1 << 3,
-    OnlyRecalc = 1 << 4,
-    Pending = 1 << 5
+    Pending = 1 << 4
   };
   enum LayoutAlignment : uint8_t { Left, Center, Right };
 
@@ -49,7 +48,7 @@ struct gvLayout : gvItem {
     update(ItemFlag::SizeHintChanged);
   }
   void updateOnly() {
-    update(ItemFlag::OnlyRecalc);
+    update(0);
   }
   void setMargin(int margin) {
     margin_ = margin;

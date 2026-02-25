@@ -109,6 +109,7 @@ void gvLayout::setupGeom() {
 }
 
 void gvLayout::calcGeom() {
+  flag_ &= ~ItemFlag::AutoFixed;
   calcGeom_impl();
   for (const auto item : items_) {
     item->flag_ &= ~ItemFlag::AutoFixed;
@@ -142,19 +143,16 @@ gvLayout* gvLayout::updateTop() {
 }
 
 void gvLayout::flush() {
-  flag_ &= ~ItemFlag::AutoFixed;
   flag_ &= ~ItemFlag::Pending;
   if (flag_ & ItemFlag::SizeHintChanged) {
     flag_ &= ~ItemFlag::SizeHintChanged;
     setupGeom();
   }
   int n = (int)items_.size();
-  int force_minw = minw_ + 2 * margin_ + (n > 0 ? spacing_ * (n - 1) : 0);
+  int force_minw = minw_ + 2 * margin_ + spacing_ * (n > 0 ? (n - 1) : 0);
   int force_minh = minh_ + 2 * margin_;
-  if (!root_) {
-    width_ = std::max(parent_->width_, force_minw);
-    height_ = std::max(parent_->height_, force_minh);
-  }
+  width_ = std::max(parent_->width_, force_minw);
+  height_ = std::max(parent_->height_, force_minh);
   calcGeom();
 }
 
