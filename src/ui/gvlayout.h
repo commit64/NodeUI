@@ -51,6 +51,12 @@ struct gvLayout : gvItem {
   void updateOnly() {
     update(ItemFlag::OnlyRecalc);
   }
+  void setMargin(int margin) {
+    margin_ = margin;
+  }
+  void setSpacing(int spacing) {
+    spacing_ = spacing;
+  }
 
 protected:
   friend struct GraphicsItem;

@@ -27,23 +27,33 @@ void gvLayout::addLayout(gvLayout* layout) {
 
 void gvLayout::getItemSize(gvItem* item, int& w, int& h) {
   if (item->type_ == ItemType::Widget) {
-    auto widget = static_cast<gvWidget*>(item);
-    w = widget->parent_->w_;
-    h = widget->parent_->h_;
+    auto* widget = static_cast<gvWidget*>(item)->parent_;
+    if (widget->layout_) {
+      w = widget->layout_->w_;
+      h = widget->layout_->h_;
+    } else {
+      w = widget->w_;
+      h = widget->h_;
+    }
   } else {
-    auto layout = static_cast<gvLayout*>(item);
+    auto* layout = static_cast<gvLayout*>(item);
     w = layout->w_;
     h = layout->h_;
   }
 }
 
 void gvLayout::getItemMinSize(gvItem* item, int& w, int& h) {
-  if (item->type_ == gvItem::ItemType::Widget) {
-    auto widget = static_cast<gvWidget*>(item);
-    w = widget->parent_->minw_;
-    h = widget->parent_->minh_;
+  if (item->type_ == ItemType::Widget) {
+    auto* widget = static_cast<gvWidget*>(item)->parent_;
+    if (widget->layout_) {
+      w = widget->layout_->minw_;
+      h = widget->layout_->minh_;
+    } else {
+      w = widget->minw_;
+      h = widget->minh_;
+    }
   } else {
-    auto layout = static_cast<gvLayout*>(item);
+    auto* layout = static_cast<gvLayout*>(item);
     w = layout->minw_;
     h = layout->minh_;
   }
@@ -61,12 +71,12 @@ int gvLayout::fitItemSize(const int item, const int pos, const int all,
 }
 
 void gvLayout::setParentItem(GraphicsItem* parent) {
-  for (auto item : items_) {
+  for (const auto item : items_) {
     if (item->type_ == ItemType::Widget) {
-      auto widget = static_cast<gvWidget*>(item)->parent_;
+      auto* widget = static_cast<gvWidget*>(item)->parent_;
       widget->setParentItem(parent);
     } else {
-      auto layout = static_cast<gvLayout*>(item);
+      auto* layout = static_cast<gvLayout*>(item);
       layout->setParentItem(parent);
     }
   }
@@ -138,6 +148,13 @@ void gvLayout::flush() {
     flag_ &= ~ItemFlag::SizeHintChanged;
     setupGeom();
   }
+  int n = (int)items_.size();
+  int force_minw = minw_ + 2 * margin_ + (n > 0 ? spacing_ * (n - 1) : 0);
+  int force_minh = minh_ + 2 * margin_;
+  if (!root_) {
+    width_ = std::max(parent_->width_, force_minw);
+    height_ = std::max(parent_->height_, force_minh);
+  }
   calcGeom();
 }
 
@@ -177,15 +194,9 @@ void gvRowLayout::setupGeom_impl() {
 
 void gvRowLayout::calcGeom_impl() {
   int n = (int)items_.size();
-  int force_minw = minw_ + 2 * margin_ + (n > 0 ? spacing_ * (n - 1) : 0);
-  int force_minh = minh_ + 2 * margin_;
-  if (!root_) {
-    width_ = std::max(parent_->width_, force_minw);
-    height_ = std::max(parent_->height_, force_minh);
-  }
-
-  int fixedw = 0, new_fixedw = 0;
-  int freew = w_, new_freew = w_;
+  int fixedw = 0, new_fixedw;
+  int freew = w_, new_freew;
+  int w = width_ - 2 * margin_ - spacing_ * (n > 0 ? (n - 1) : 0);
 
   int last_free_idx = -1;
   int idx;
@@ -196,6 +207,8 @@ void gvRowLayout::calcGeom_impl() {
     int x = 0;
     float extra = 0;
     flag = false;
+    new_freew = freew;
+    new_fixedw = fixedw;
 
     for (const auto item : items_) {
       if (item->flag_ & ItemFlag::AutoFixed) {
@@ -209,7 +222,7 @@ void gvRowLayout::calcGeom_impl() {
       getItemMinSize(item, item_minw, item_minh);
 
       int new_itemw;
-      int available = width_ - fixedw - 2 * margin_ - spacing_ * (n - 1);
+      int available = w - fixedw;
       if (available > 0) {
         new_itemw = fitItemSize(itemw, x, freew, available, is_last, extra);
       } else {
@@ -239,7 +252,7 @@ void gvRowLayout::calcGeom_impl() {
 
   int x = margin_;
   int y;
-  int available = width_ - fixedw - 2 * margin_ - spacing_ * (n - 1);
+  int available = w - fixedw;
   float extra = 0;
   int used = 0;
   idx = -1;
@@ -255,10 +268,10 @@ void gvRowLayout::calcGeom_impl() {
       used += itemw;
     }
 
-    y = margin_ + (height_ - itemh) / 2;
+    y = (height_ - itemh) / 2;
 
-    int xpos = x + x_;
-    int ypos = y + y_;
+    int xpos = x_ + x;
+    int ypos = y_ + y;
     if (item->type_ == ItemType::Widget) {
       auto widget = static_cast<gvWidget*>(item);
       auto parent = widget->parent_;
@@ -269,8 +282,8 @@ void gvRowLayout::calcGeom_impl() {
         auto layout = parent->layout_.get();
         layout->width_ = itemw;
         layout->height_ = itemh;
-        layout->x_ = xpos;
-        layout->y_ = ypos;
+        layout->x_ = 0;
+        layout->y_ = 0;
       }
     } else {
       auto layout = static_cast<gvLayout*>(item);

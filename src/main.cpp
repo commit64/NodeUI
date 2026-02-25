@@ -58,17 +58,26 @@ int main(int argc, char** argv) {
   view.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   auto layout = new ui::gvRowLayout;
-  for (int i = 0; i < 30; ++i) {
+  for (int i = 0; i < 10; ++i) {
     auto* w = new ui::GraphicsItem(i, i);
     w->setMinimumSize(i, i);
     layout->addWidget(w);
   }
   auto l2 = new ui::gvRowLayout;
-  for (int i = 0; i < 50; ++i) {
+  for (int i = 0; i < 30; ++i) {
     auto* w = new ui::GraphicsItem(i, i);
     l2->addWidget(w);
   }
+  auto l3 = new ui::gvRowLayout;
+  for (int i = 0; i < 30; ++i) {
+    auto* w = new ui::GraphicsItem(i, i);
+    l3->addWidget(w);
+  }
+
+  auto* h = new ui::GraphicsItem(300, 300);
+  h->setLayout(std::unique_ptr<ui::gvLayout>(l3));
   layout->addLayout(l2);
+  layout->addWidget(h);
   m->setLayout(std::unique_ptr<ui::gvLayout>(layout));
   m->ownLayout()->updateAll();
   view.rectItem = m;
