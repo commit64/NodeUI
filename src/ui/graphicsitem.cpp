@@ -24,8 +24,8 @@ void GraphicsItem::setPreferredSize(int w, int h) {
 }
 
 void GraphicsItem::setMinimumSize(int w, int h) {
-  minw_ = w;
-  minh_ = h;
+  minw_ = std::max(w, 0);
+  minh_ = std::max(h, 0);
 }
 
 void GraphicsItem::setLayout(std::unique_ptr<gvLayout> layout) {

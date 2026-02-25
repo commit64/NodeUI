@@ -58,8 +58,9 @@ int main(int argc, char** argv) {
   view.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   auto layout = new ui::gvRowLayout;
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 30; ++i) {
     auto* w = new ui::GraphicsItem(i, i);
+    w->setMinimumSize(i, i);
     layout->addWidget(w);
   }
   auto l2 = new ui::gvRowLayout;

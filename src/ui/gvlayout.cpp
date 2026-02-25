@@ -85,7 +85,6 @@ void gvLayout::setupGeom() {
   minh_ = 0;
 
   for (const auto item : items_) {
-    item->flag_ &= ~ItemFlag::AutoFixed;
     gvLayout* layout;
     if (item->type_ == ItemType::Widget) {
       layout = static_cast<gvWidget*>(item)->parent_->layout_.get();
@@ -102,6 +101,7 @@ void gvLayout::setupGeom() {
 void gvLayout::calcGeom() {
   calcGeom_impl();
   for (const auto item : items_) {
+    item->flag_ &= ~ItemFlag::AutoFixed;
     gvLayout* layout;
     if (item->type_ == ItemType::Widget) {
       layout = static_cast<gvWidget*>(item)->parent_->layout_.get();
@@ -132,6 +132,7 @@ gvLayout* gvLayout::updateTop() {
 }
 
 void gvLayout::flush() {
+  flag_ &= ~ItemFlag::AutoFixed;
   flag_ &= ~ItemFlag::Pending;
   if (flag_ & ItemFlag::SizeHintChanged) {
     flag_ &= ~ItemFlag::SizeHintChanged;
